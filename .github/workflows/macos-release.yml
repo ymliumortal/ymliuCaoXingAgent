@@ -165,17 +165,18 @@ jobs:
             const tag = process.env.RELEASE_TAG || "v0.1.0";
             const release = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
             const macAssetPattern = /(?:\.dmg|\.zip)(?:\.blockmap)?$/i;
+            const macPackagePattern = /\.(?:dmg|zip)$/i;
             for (const asset of release.data.assets) {
-              if (asset.name === "latest-mac.yml" || macAssetPattern.test(asset.name)) {
+              if (asset.name === "latest.yml" || asset.name === "latest-mac.yml" || macAssetPattern.test(asset.name)) {
                 await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
                 core.info(`deleted ${asset.name}`);
               }
             }
             const outputDir = "release-mac";
             const files = fs.readdirSync(outputDir)
-              .filter((name) => name === "latest-mac.yml" || macAssetPattern.test(name))
+              .filter((name) => macPackagePattern.test(name))
               .sort();
-            if (!files.includes("latest-mac.yml") || !files.some((name) => name.endsWith(".dmg")) || !files.some((name) => name.endsWith(".zip"))) {
+            if (files.length !== 2 || !files.some((name) => name.endsWith(".dmg")) || !files.some((name) => name.endsWith(".zip"))) {
               throw new Error(`macOS 发布资源不完整：${files.join(", ")}`);
             }
             for (const name of files) {
@@ -188,7 +189,7 @@ jobs:
                 name,
                 data: fs.createReadStream(filePath),
                 headers: {
-                  "content-type": name.endsWith(".yml") ? "text/yaml" : "application/octet-stream",
+                  "content-type": "application/octet-stream",
                   "content-length": size,
                 },
               });
