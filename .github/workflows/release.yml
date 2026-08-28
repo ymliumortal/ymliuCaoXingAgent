@@ -27,6 +27,27 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Ensure a single GitHub Release exists
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const tag = context.ref.replace("refs/tags/", "");
+            const { owner, repo } = context.repo;
+            try {
+              await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tag,
+                name: tag,
+                draft: false,
+                prerelease: false,
+              });
+            }
+
       - name: Build and publish GitHub Release
         run: npm run build:installer -- --publish always
         env:
