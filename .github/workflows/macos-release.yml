@@ -35,6 +35,50 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npx electron-builder --mac dmg zip --universal --publish never "-c.directories.output=release-mac"
 
+      - name: Generate macOS update metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("fs");
+          const crypto = require("crypto");
+          const path = require("path");
+
+          const outputDir = "release-mac";
+          const artifacts = fs.readdirSync(outputDir)
+            .filter((name) => /\.(zip|dmg)$/i.test(name))
+            .sort((a, b) => {
+              const aIsZip = a.toLowerCase().endsWith(".zip");
+              const bIsZip = b.toLowerCase().endsWith(".zip");
+              return Number(bIsZip) - Number(aIsZip) || a.localeCompare(b);
+            });
+          const zip = artifacts.find((name) => name.toLowerCase().endsWith(".zip"));
+          const dmg = artifacts.find((name) => name.toLowerCase().endsWith(".dmg"));
+          if (!zip || !dmg) {
+            throw new Error(`macOS 发布包不完整：${artifacts.join(", ")}`);
+          }
+
+          const sha512 = (name) => crypto.createHash("sha512")
+            .update(fs.readFileSync(path.join(outputDir, name)))
+            .digest("base64");
+          const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
+          const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const lines = [
+            `version: ${packageJson.version}`,
+            "files:",
+            `  - url: ${quote(zip)}`,
+            `    sha512: ${quote(sha512(zip))}`,
+            `  - url: ${quote(dmg)}`,
+            `    sha512: ${quote(sha512(dmg))}`,
+            `path: ${quote(zip)}`,
+            `sha512: ${quote(sha512(zip))}`,
+            `releaseDate: ${quote(new Date().toISOString())}`,
+            "",
+          ];
+          fs.writeFileSync(path.join(outputDir, "latest-mac.yml"), lines.join("\n"), "utf8");
+          console.log(`Generated ${outputDir}/latest-mac.yml for ${zip} and ${dmg}`);
+          NODE
+
       - name: Verify macOS package and launch app
         shell: bash
         run: |
