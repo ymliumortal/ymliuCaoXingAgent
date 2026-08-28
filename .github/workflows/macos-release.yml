@@ -45,7 +45,7 @@ jobs:
 
           const outputDir = "release-mac";
           const version = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
-          const prefix = "conduct-assistant-" + version + "-macos-universal";
+          const prefix = "ymliuCaoXingAgent";
           const mappings = [
             [".zip", prefix + ".zip"],
             [".dmg", prefix + ".dmg"],
@@ -54,12 +54,16 @@ jobs:
           ];
           const names = fs.readdirSync(outputDir);
           for (const [suffix, target] of mappings) {
-            const source = names.find((name) => name.endsWith(suffix) && !name.startsWith("conduct-assistant-"));
-            if (!source) {
+            const source = names.find((name) => name.endsWith(suffix) && name !== target);
+            if (!source && !fs.existsSync(path.join(outputDir, target))) {
               throw new Error("未找到 macOS 资源：" + suffix);
             }
-            fs.renameSync(path.join(outputDir, source), path.join(outputDir, target));
-            console.log(source + " -> " + target);
+            if (source) {
+              fs.renameSync(path.join(outputDir, source), path.join(outputDir, target));
+              console.log(source + " -> " + target);
+            } else {
+              console.log(target + " 已是标准名称");
+            }
           }
           NODE
 
