@@ -35,6 +35,34 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npx electron-builder --mac dmg zip --universal --publish never "-c.directories.output=release-mac"
 
+      - name: Normalize macOS asset names
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("fs");
+          const path = require("path");
+
+          const outputDir = "release-mac";
+          const version = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
+          const prefix = "conduct-assistant-" + version + "-macos-universal";
+          const mappings = [
+            [".zip", prefix + ".zip"],
+            [".dmg", prefix + ".dmg"],
+            [".zip.blockmap", prefix + ".zip.blockmap"],
+            [".dmg.blockmap", prefix + ".dmg.blockmap"],
+          ];
+          const names = fs.readdirSync(outputDir);
+          for (const [suffix, target] of mappings) {
+            const source = names.find((name) => name.endsWith(suffix) && !name.startsWith("conduct-assistant-"));
+            if (!source) {
+              throw new Error("未找到 macOS 资源：" + suffix);
+            }
+            fs.renameSync(path.join(outputDir, source), path.join(outputDir, target));
+            console.log(source + " -> " + target);
+          }
+          NODE
+
       - name: Generate macOS update metadata
         shell: bash
         run: |
