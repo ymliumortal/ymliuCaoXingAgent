@@ -4,6 +4,7 @@
 !ifndef BUILD_UNINSTALLER
 Var DataLocation
 Var DataLocationInput
+Var DataLocationEmpty
 Var DesktopShortcut
 Var DesktopShortcutInput
 !endif
@@ -38,10 +39,36 @@ Function DataLocationBrowse
   ${EndIf}
 FunctionEnd
 
+Function ValidateDataLocationEmpty
+  StrCpy $DataLocationEmpty "1"
+  ClearErrors
+  FindFirst $0 $1 "$DataLocation\*"
+  IfErrors dataLocationEmptyDone
+dataLocationFindNext:
+  StrCmp $1 "." dataLocationNext
+  StrCmp $1 ".." dataLocationNext
+  StrCpy $DataLocationEmpty "0"
+  FindClose $0
+  Return
+dataLocationNext:
+  ClearErrors
+  FindNext $0 $1
+  IfErrors dataLocationEmptyClose
+  Goto dataLocationFindNext
+dataLocationEmptyClose:
+  FindClose $0
+dataLocationEmptyDone:
+FunctionEnd
+
 Function DataLocationPageLeave
   ${NSD_GetText} $DataLocationInput $DataLocation
   ${If} $DataLocation == ""
     StrCpy $DataLocation "$DOCUMENTS\操行统计助手数据"
+  ${EndIf}
+  Call ValidateDataLocationEmpty
+  ${If} $DataLocationEmpty == "0"
+    MessageBox MB_ICONEXCLAMATION|MB_OK "选择目标文件夹不为空"
+    Abort
   ${EndIf}
   ${NSD_GetState} $DesktopShortcutInput $DesktopShortcut
 FunctionEnd

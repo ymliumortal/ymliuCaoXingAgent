@@ -30,37 +30,33 @@ npm start
 - 发现新版本时先询问是否下载；下载完成后再次询问是否重启安装，不会强制更新。
 - 未配置 GitHub 仓库时功能保持停用，不影响本地使用。
 
-确定 GitHub 仓库后，编辑 \`electron/update-config.json\`：
+当前项目已配置使用 GitHub 仓库 `ymliumortal/ymliuCaoXingAgent`，更新源配置位于 `electron/update-config.json`：
 
-\`\`\`json
+```json
 {
   "provider": "github",
-  "owner": "你的 GitHub 账号",
-  "repo": "你的仓库名",
+  "owner": "ymliumortal",
+  "repo": "ymliuCaoXingAgent",
   "releaseType": "release"
 }
-\`\`\`
+```
 
-发布更新时需要把 \`package.json\` 的 \`version\` 改为新版本，并在 \`build\` 中加入 GitHub 发布配置：
+发布更新时需要把 `package.json` 的 `version` 改为新版本，然后创建并推送带 `v` 前缀的标签：
 
-\`\`\`json
-{
-  "repository": "https://github.com/你的账号/你的仓库.git",
-  "build": {
-    "publish": [
-      { "provider": "github", "releaseType": "release" }
-    ]
-  }
-}
-\`\`\`
+```powershell
+git add package.json package-lock.json
+git commit -m "Prepare release v0.1.1"
+git tag v0.1.1
+git push origin main --follow-tags
+```
 
-然后使用 GitHub Actions 或本机的 \`GH_TOKEN\` 执行：
+GitHub Actions 会自动在 Windows 环境安装依赖、运行测试、构建并发布安装程序。工作流文件为 `.github/workflows/release.yml`。也可以在本机设置 `GH_TOKEN` 后执行：
 
-\`\`\`powershell
+```powershell
 npm run build:installer -- --publish always
-\`\`\`
+```
 
-上传时必须将同一次构建生成的安装程序、\`latest.yml\` 和对应的 \`.blockmap\` 一起放到 GitHub Release，Release 不能保持 Draft 状态。建议正式公开发布前配置 Windows 代码签名证书；当前项目未配置签名证书，更新器仍会校验发布元数据中的文件摘要，但无法提供发布者签名校验。
+每个正式 Release 必须包含同一次构建生成的安装程序、`latest.yml` 和对应的 `.blockmap`；工作流会自动上传这些更新资源。Release 不能保持 Draft 状态。建议正式公开发布前配置 Windows 代码签名证书；当前项目未配置签名证书，更新器仍会校验发布元数据中的文件摘要，但无法提供发布者签名校验。
 
 ## 当前目录结构
 

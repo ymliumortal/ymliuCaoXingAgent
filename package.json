@@ -2,6 +2,10 @@
   "name": "conduct-assistant",
   "version": "0.1.0",
   "description": "中国药科大学本科生综合素质测评操行统计助手",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ymliumortal/ymliuCaoXingAgent.git"
+  },
   "main": "electron/main.mjs",
   "type": "module",
   "scripts": {
@@ -34,6 +38,14 @@
       "package.json"
     ],
     "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ymliumortal",
+        "repo": "ymliuCaoXingAgent",
+        "releaseType": "release"
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
