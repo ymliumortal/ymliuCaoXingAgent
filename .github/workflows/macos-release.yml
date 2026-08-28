@@ -1,0 +1,124 @@
+name: Build macOS package
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "要覆盖的 GitHub Release 标签"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build universal macOS packages
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --mac dmg zip --universal --publish never "-c.directories.output=release-mac"
+
+      - name: Verify macOS package and launch app
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find release-mac -type d -name '*.app' -print -quit)"
+          if [[ -z "$app_path" ]]; then
+            echo "未找到 macOS .app 目录"
+            exit 1
+          fi
+          executable="$app_path/Contents/MacOS/操行统计助手"
+          test -x "$executable"
+          file "$executable"
+          if ! file "$executable" | grep -Eiq 'universal|x86_64|arm64'; then
+            echo "macOS 可执行文件架构检查失败"
+            exit 1
+          fi
+          "$executable" > "$RUNNER_TEMP/conduct-assistant-macos-smoke.log" 2>&1 &
+          app_pid=$!
+          started=false
+          for _ in {1..12}; do
+            if kill -0 "$app_pid" 2>/dev/null; then
+              started=true
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$started" != true ]]; then
+            cat "$RUNNER_TEMP/conduct-assistant-macos-smoke.log" || true
+            echo "macOS 应用未能启动"
+            exit 1
+          fi
+          kill "$app_pid" 2>/dev/null || true
+          wait "$app_pid" 2>/dev/null || true
+          echo "macOS 应用启动冒烟测试通过"
+
+      - name: Verify update metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f release-mac/latest-mac.yml
+          while IFS= read -r asset; do
+            [[ -z "$asset" ]] && continue
+            test -f "release-mac/$asset"
+          done < <(sed -nE 's/^[[:space:]]*-?[[:space:]]*url:[[:space:]]*//p' release-mac/latest-mac.yml | tr -d "'\"")
+
+      - name: Replace macOS assets in GitHub Release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+            const { owner, repo } = context.repo;
+            const tag = process.env.RELEASE_TAG || "v0.1.0";
+            const release = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+            const macAssetPattern = /(?:\.dmg|\.zip)(?:\.blockmap)?$/i;
+            for (const asset of release.data.assets) {
+              if (asset.name === "latest-mac.yml" || macAssetPattern.test(asset.name)) {
+                await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
+                core.info(`deleted ${asset.name}`);
+              }
+            }
+            const outputDir = "release-mac";
+            const files = fs.readdirSync(outputDir)
+              .filter((name) => name === "latest-mac.yml" || macAssetPattern.test(name))
+              .sort();
+            if (!files.includes("latest-mac.yml") || !files.some((name) => name.endsWith(".dmg")) || !files.some((name) => name.endsWith(".zip"))) {
+              throw new Error(`macOS 发布资源不完整：${files.join(", ")}`);
+            }
+            for (const name of files) {
+              const filePath = path.join(outputDir, name);
+              const size = fs.statSync(filePath).size;
+              await github.rest.repos.uploadReleaseAsset({
+                owner,
+                repo,
+                release_id: release.data.id,
+                name,
+                data: fs.createReadStream(filePath),
+                headers: {
+                  "content-type": name.endsWith(".yml") ? "text/yaml" : "application/octet-stream",
+                  "content-length": size,
+                },
+              });
+              core.info(`uploaded ${name} (${size} bytes)`);
+            }
