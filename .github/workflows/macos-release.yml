@@ -44,7 +44,6 @@ jobs:
           const path = require("path");
 
           const outputDir = "release-mac";
-          const version = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
           const prefix = "ymliuCaoXingAgent";
           const mappings = [
             [".zip", prefix + ".zip"],
@@ -68,48 +67,7 @@ jobs:
           NODE
 
       - name: Generate macOS update metadata
-        shell: bash
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const fs = require("fs");
-          const crypto = require("crypto");
-          const path = require("path");
-
-          const outputDir = "release-mac";
-          const artifacts = fs.readdirSync(outputDir)
-            .filter((name) => /\.(zip|dmg)$/i.test(name))
-            .sort((a, b) => {
-              const aIsZip = a.toLowerCase().endsWith(".zip");
-              const bIsZip = b.toLowerCase().endsWith(".zip");
-              return Number(bIsZip) - Number(aIsZip) || a.localeCompare(b);
-            });
-          const zip = artifacts.find((name) => name.toLowerCase().endsWith(".zip"));
-          const dmg = artifacts.find((name) => name.toLowerCase().endsWith(".dmg"));
-          if (!zip || !dmg) {
-            throw new Error(`macOS 发布包不完整：${artifacts.join(", ")}`);
-          }
-
-          const sha512 = (name) => crypto.createHash("sha512")
-            .update(fs.readFileSync(path.join(outputDir, name)))
-            .digest("base64");
-          const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
-          const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
-          const lines = [
-            `version: ${packageJson.version}`,
-            "files:",
-            `  - url: ${quote(zip)}`,
-            `    sha512: ${quote(sha512(zip))}`,
-            `  - url: ${quote(dmg)}`,
-            `    sha512: ${quote(sha512(dmg))}`,
-            `path: ${quote(zip)}`,
-            `sha512: ${quote(sha512(zip))}`,
-            `releaseDate: ${quote(new Date().toISOString())}`,
-            "",
-          ];
-          fs.writeFileSync(path.join(outputDir, "latest-mac.yml"), lines.join("\n"), "utf8");
-          console.log(`Generated ${outputDir}/latest-mac.yml for ${zip} and ${dmg}`);
-          NODE
+        run: node build/generate-update-metadata.mjs release-mac --mac
 
       - name: Verify macOS package and launch app
         shell: bash
@@ -120,14 +78,14 @@ jobs:
             echo "未找到 macOS .app 目录"
             exit 1
           fi
-          executable="$app_path/Contents/MacOS/操行统计助手"
+          executable="$app_path/Contents/MacOS/ymliuCaoXingAgent"
           test -x "$executable"
           file "$executable"
           if ! file "$executable" | grep -Eiq 'universal|x86_64|arm64'; then
             echo "macOS 可执行文件架构检查失败"
             exit 1
           fi
-          "$executable" > "$RUNNER_TEMP/conduct-assistant-macos-smoke.log" 2>&1 &
+          "$executable" > "$RUNNER_TEMP/ymliuCaoXingAgent-macos-smoke.log" 2>&1 &
           app_pid=$!
           started=false
           for _ in {1..12}; do
@@ -138,7 +96,7 @@ jobs:
             sleep 1
           done
           if [[ "$started" != true ]]; then
-            cat "$RUNNER_TEMP/conduct-assistant-macos-smoke.log" || true
+            cat "$RUNNER_TEMP/ymliuCaoXingAgent-macos-smoke.log" || true
             echo "macOS 应用未能启动"
             exit 1
           fi
@@ -169,18 +127,15 @@ jobs:
             const tag = process.env.RELEASE_TAG || "v0.1.0";
             const release = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
             const macAssetPattern = /(?:\.dmg|\.zip)(?:\.blockmap)?$/i;
-            const macPackagePattern = /\.(?:dmg|zip)$/i;
             for (const asset of release.data.assets) {
-              if (asset.name === "latest.yml" || asset.name === "latest-mac.yml" || macAssetPattern.test(asset.name)) {
+              if (asset.name === "latest-mac.yml" || macAssetPattern.test(asset.name)) {
                 await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
                 core.info(`deleted ${asset.name}`);
               }
             }
             const outputDir = "release-mac";
-            const files = fs.readdirSync(outputDir)
-              .filter((name) => macPackagePattern.test(name))
-              .sort();
-            if (files.length !== 2 || !files.some((name) => name.endsWith(".dmg")) || !files.some((name) => name.endsWith(".zip"))) {
+            const files = ["ymliuCaoXingAgent.dmg", "ymliuCaoXingAgent.zip", "latest-mac.yml"];
+            if (!files.every((name) => fs.existsSync(path.join(outputDir, name)))) {
               throw new Error(`macOS 发布资源不完整：${files.join(", ")}`);
             }
             for (const name of files) {

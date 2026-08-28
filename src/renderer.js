@@ -71,7 +71,7 @@ function setTransientError(nextError) {
 async function invoke(channel, payload) {
   try {
     error = "";
-    const result = await window.conduct.invoke(channel, payload);
+    const result = await window.ymliuCaoXingAgent.invoke(channel, payload);
     return result;
   } catch (cause) {
     const nextError = cause?.message || String(cause);
@@ -259,7 +259,7 @@ function captureDraftForm(selector, target) {
 }
 function pathFromDraggedFile(file) {
   try {
-    return window.conduct.getPathForFile?.(file) || file?.path || "";
+    return window.ymliuCaoXingAgent.getPathForFile?.(file) || file?.path || "";
   } catch {
     return file?.path || "";
   }
@@ -445,7 +445,7 @@ function ensureAiStatusPolling() {
 }
 
 async function boot() {
-  window.conduct.onUpdateState?.(receiveUpdateState);
+  window.ymliuCaoXingAgent.onUpdateState?.(receiveUpdateState);
   state = await invoke("app:state");
   updateState = state?.update || updateState;
   promptForUpdate(updateState);
@@ -455,7 +455,7 @@ async function boot() {
 function loginView() {
   const accounts = state?.accounts || [];
   app.innerHTML = `<div class="login"><section class="login-card">
-    <h1>操行统计助手</h1><p class="muted">0.1.0 · 2025-2026 学年 · 本地优先</p>
+    <h1>ymliuCaoXingAgent</h1><p class="muted">操行统计助手 · 0.1.0 · 2025-2026 学年 · 本地优先</p>
     <div class="card" style="padding:14px;background:#f8fafc"><strong>登录已有本地账户</strong>
       <label style="margin-top:12px">账户<select id="login-account">${accounts.map((item) => `<option value="${esc(item.id)}">${esc(item.name)}${item.profile?.name ? ` · ${esc(item.profile.name)}` : ""}</option>`).join("") || `<option value="">暂无账户</option>`}</select></label>
       <label style="margin-top:10px">密码<input id="login-password" type="password" /></label>
@@ -505,7 +505,7 @@ function shellView(content) {
     const groupActive = item.children.some(([key]) => activePage === key);
     return `<section class="nav-group ${groupActive ? "active" : ""}"><div class="nav-group-title">${item.label}</div><div class="nav-subnav">${item.children.map(([key, label]) => `<button class="${activePage === key ? "active" : ""}" data-page="${key}">${label}</button>`).join("")}</div></section>`;
   }).join("");
-app.innerHTML = `<div class="app-shell"><aside class="sidebar"><div class="brand">操行统计助手</div><div class="version">0.1.0 · ${esc(project().academicYear)}</div><nav class="nav">${navMarkup}</nav><div class="sidebar-account"><div class="muted">本机账户：${esc(account()?.name)}</div><button id="logout" class="secondary">退出登录</button></div></aside><main class="main"><div class="topbar"><h1>${esc(titles[activePage] || "总览")}</h1><div class="user-chip">${esc(account()?.profile?.name || "未填写姓名")} · ${esc(account()?.profile?.studentId || "未填写学号")}</div></div>${message ? `<div class="notice">${esc(message)}</div>` : ""}${error ? `<div class="notice error">${esc(error)}</div>` : ""}${content}</main></div>`;
+app.innerHTML = `<div class="app-shell"><aside class="sidebar"><div class="brand">ymliuCaoXingAgent</div><div class="version">操行统计助手 · 0.1.0 · ${esc(project().academicYear)}</div><nav class="nav">${navMarkup}</nav><div class="sidebar-account"><div class="muted">本机账户：${esc(account()?.name)}</div><button id="logout" class="secondary">退出登录</button></div></aside><main class="main"><div class="topbar"><h1>${esc(titles[activePage] || "总览")}</h1><div class="user-chip">${esc(account()?.profile?.name || "未填写姓名")} · ${esc(account()?.profile?.studentId || "未填写学号")}</div></div>${message ? `<div class="notice">${esc(message)}</div>` : ""}${error ? `<div class="notice error">${esc(error)}</div>` : ""}${content}</main></div>`;
   document.querySelectorAll(".main > .notice").forEach((notice) => notice.remove());
   const globalNotices = globalNoticesMarkup();
   if (globalNotices) app.insertAdjacentHTML("afterbegin", globalNotices);
@@ -621,7 +621,7 @@ function classPage() {
   const classInfo = session().classExportInfo || {};
   const selectedCount = imports.filter((item) => classSelectedPackageIds.has(item.packageId)).length;
   const allSelected = imports.length > 0 && selectedCount === imports.length;
-  return `<section class="card"><div class="section-heading"><div><span class="eyebrow">班级输出信息</span><h2>专业与班级号</h2></div><span class="muted">用于命名班级输出文件</span></div><form id="class-info-form" class="grid two"><label>专业<input name="major" required value="${esc(classInfo.major || "")}" placeholder="例如：中药学类" /></label><label>班级号<input name="classId" required value="${esc(classInfo.classId || "")}" placeholder="例如：2401" /></label><div class="actions" style="grid-column:1/-1"><button type="submit">保存班级信息</button></div></form></section><section class="card"><div class="section-heading"><div><span class="eyebrow">班级资料输入</span><h2>导入学生资料包</h2></div><span class="score-badge">${imports.length} 人</span></div><div id="class-dropzone" class="dropzone">把多个 .conductpkg 或 .zip 拖到这里</div><div class="actions"><button id="choose-packages">选择学生资料包</button><button id="class-export" ${imports.length ? "" : "disabled"}>生成班级两个核心表格</button><button id="class-evidence-export" class="secondary" ${imports.length ? "" : "disabled"}>一键输出学生证明文件汇总</button></div></section><section class="card"><div class="section-heading"><div><span class="eyebrow">已导入学生</span><h2>学生资料列表</h2></div><span class="muted" id="class-selected-count">已选 ${selectedCount} 人</span></div><div class="bulk-toolbar"><label><input type="checkbox" id="class-select-all" ${allSelected ? "checked" : ""} ${imports.length ? "" : "disabled"} /> 全选</label><span class="muted">删除会同步移除已导入记录、对应的本地资料目录和原始压缩文件。</span><button type="button" id="class-delete-selected" class="danger" ${selectedCount ? "" : "disabled"}>批量删除</button></div><div class="table-wrap"><table><thead><tr><th><span class="sr-only">选择</span></th><th>姓名</th><th>学号</th><th>活动记录</th><th>志愿记录</th><th>任职记录</th><th>状态</th></tr></thead><tbody>${imports.map((item) => `<tr><td><input type="checkbox" class="class-package-check" data-class-package-check="${esc(item.packageId)}" ${classSelectedPackageIds.has(item.packageId) ? "checked" : ""} aria-label="选择 ${esc(item.manifest?.profile?.name || item.manifest?.profile?.studentId || "学生资料包")}" /></td><td>${esc(item.manifest?.profile?.name)}</td><td>${esc(item.manifest?.profile?.studentId)}</td><td>${item.manifest?.activities?.length || 0}</td><td>${item.manifest?.volunteers?.length || 0}</td><td>${item.manifest?.positions?.length || 0}</td><td>已导入</td></tr>`).join("") || `<tr><td colspan="7" class="muted">暂无学生资料包</td></tr>`}</tbody></table></div><p class="muted">PU 分数在班级输出中默认保持空白；额外志愿服务按资料包中的手动记录计算。</p></section>`;
+  return `<section class="card"><div class="section-heading"><div><span class="eyebrow">班级输出信息</span><h2>专业与班级号</h2></div><span class="muted">用于命名班级输出文件</span></div><form id="class-info-form" class="grid two"><label>专业<input name="major" required value="${esc(classInfo.major || "")}" placeholder="例如：中药学类" /></label><label>班级号<input name="classId" required value="${esc(classInfo.classId || "")}" placeholder="例如：2401" /></label><div class="actions" style="grid-column:1/-1"><button type="submit">保存班级信息</button></div></form></section><section class="card"><div class="section-heading"><div><span class="eyebrow">班级资料输入</span><h2>导入学生资料包</h2></div><span class="score-badge">${imports.length} 人</span></div><div id="class-dropzone" class="dropzone">把多个 .zip 拖到这里</div><div class="actions"><button id="choose-packages">选择学生资料包</button><button id="class-export" ${imports.length ? "" : "disabled"}>生成班级两个核心表格</button><button id="class-evidence-export" class="secondary" ${imports.length ? "" : "disabled"}>一键输出学生证明文件汇总</button></div></section><section class="card"><div class="section-heading"><div><span class="eyebrow">已导入学生</span><h2>学生资料列表</h2></div><span class="muted" id="class-selected-count">已选 ${selectedCount} 人</span></div><div class="bulk-toolbar"><label><input type="checkbox" id="class-select-all" ${allSelected ? "checked" : ""} ${imports.length ? "" : "disabled"} /> 全选</label><span class="muted">删除会同步移除已导入记录、对应的本地资料目录和原始压缩文件。</span><button type="button" id="class-delete-selected" class="danger" ${selectedCount ? "" : "disabled"}>批量删除</button></div><div class="table-wrap"><table><thead><tr><th><span class="sr-only">选择</span></th><th>姓名</th><th>学号</th><th>活动记录</th><th>志愿记录</th><th>任职记录</th><th>状态</th></tr></thead><tbody>${imports.map((item) => `<tr><td><input type="checkbox" class="class-package-check" data-class-package-check="${esc(item.packageId)}" ${classSelectedPackageIds.has(item.packageId) ? "checked" : ""} aria-label="选择 ${esc(item.manifest?.profile?.name || item.manifest?.profile?.studentId || "学生资料包")}" /></td><td>${esc(item.manifest?.profile?.name)}</td><td>${esc(item.manifest?.profile?.studentId)}</td><td>${item.manifest?.activities?.length || 0}</td><td>${item.manifest?.volunteers?.length || 0}</td><td>${item.manifest?.positions?.length || 0}</td><td>已导入</td></tr>`).join("") || `<tr><td colspan="7" class="muted">暂无学生资料包</td></tr>`}</tbody></table></div><p class="muted">PU 分数在班级输出中默认保持空白；额外志愿服务按资料包中的手动记录计算。</p></section>`;
 }
 
 function settingsPage() {
@@ -969,7 +969,7 @@ function wirePage() {
   $("#activity-ai-recognize")?.addEventListener("click", async () => recognizeEvidenceBatch(activityDraftEvidenceIds, "activity"));
   $("#volunteer-ai-recognize")?.addEventListener("click", async () => recognizeEvidenceBatch(volunteerDraftEvidenceIds, "volunteer"));
   $("#evidence-ai-batch")?.addEventListener("click", async () => recognizeEvidenceBatch((session().evidence || []).map((item) => item.id), "activity"));
-  document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => window.conduct.openPath(button.dataset.open)));
+  document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => window.ymliuCaoXingAgent.openPath(button.dataset.open)));
   async function importPackages(paths) { const result = await invoke("class:import", paths); if (result) { state = result.state; classSelectedPackageIds.clear(); message = `已导入 ${result.imported.length} 个学生资料包`; render(); } }
   $("#choose-packages")?.addEventListener("click", async () => importPackages(await invoke("dialog:openFiles", { classPackages: true })));
   const classDrop = $("#class-dropzone"); classDrop?.addEventListener("dragover", (event) => { event.preventDefault(); classDrop.classList.add("drag"); }); classDrop?.addEventListener("dragleave", () => classDrop.classList.remove("drag")); classDrop?.addEventListener("drop", async (event) => { event.preventDefault(); classDrop.classList.remove("drag"); importPackages(pathsFromDataTransfer(event.dataTransfer)); });
@@ -1148,7 +1148,7 @@ function wirePage() {
 function render() {
   if (!state?.session) return loginView();
   let content = ({ overview: overviewPage, activities: activitiesPage, volunteer: volunteerPage, positions: positionsPage, "student-package": studentPackagePage, evidence: evidencePage, class: classPage, settings: settingsPage })[activePage]();
-  if (activePage === "student-package") content = content.replaceAll(".conductpkg", ".zip");
+  if (activePage === "student-package" || activePage === "class") content = content.replaceAll(".conductpkg", ".zip");
   shellView(content);
   if (activePage === "settings") document.querySelector(".main .topbar")?.insertAdjacentHTML("afterend", updateCardMarkup());
   wirePage();

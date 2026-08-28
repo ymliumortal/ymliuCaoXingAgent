@@ -3,6 +3,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { mkdirSync, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import { promisify } from "node:util";
@@ -36,11 +37,45 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, "..");
 const AI_REQUEST_DEFAULTS = Object.freeze({ temperature: 0, maxTokens: 800 });
 const DATA_LAYOUT_VERSION = 2;
-app.setName("conduct-assistant");
+const APP_STORAGE_NAMESPACE = "ymliuCaoXingAgent";
+const LEGACY_STORAGE_NAMESPACE = "conduct-assistant";
+app.setName(APP_STORAGE_NAMESPACE);
+function pointerPathFor(namespace) {
+  return path.join(app.getPath("appData"), namespace, "storage-location.txt");
+}
+
+function fallbackDataRootPath() {
+  return path.resolve(path.join(app.getPath("documents"), `${APP_STORAGE_NAMESPACE}-数据`));
+}
+
+function readInitialDataRoot() {
+  for (const candidate of [
+    pointerPathFor(APP_STORAGE_NAMESPACE),
+    pointerPathFor(LEGACY_STORAGE_NAMESPACE),
+  ]) {
+    try {
+      const configured = readFileSync(candidate, "utf8").trim();
+      if (configured && path.isAbsolute(configured)) return path.resolve(configured);
+    } catch (error) {
+      if (error.code !== "ENOENT") console.warn("无法读取已有数据位置配置：", error.message);
+    }
+  }
+  return fallbackDataRootPath();
+}
+
+const initialDataRoot = readInitialDataRoot();
+try {
+  mkdirSync(initialDataRoot, { recursive: true });
+  mkdirSync(path.join(initialDataRoot, ".runtime"), { recursive: true });
+  app.setPath("userData", initialDataRoot);
+  app.setPath("sessionData", path.join(initialDataRoot, ".runtime"));
+} catch (error) {
+  console.warn("无法在启动前切换 Electron 用户数据目录：", error.message);
+}
 let mainWindow;
 let vault = null;
 let sessionAccountId = null;
-let activeDataRoot = "";
+let activeDataRoot = initialDataRoot;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const updateState = {
   status: "disabled",
@@ -131,6 +166,7 @@ async function initializeAutoUpdater() {
   if (configuredFeed) autoUpdater.setFeedURL(configuredFeed);
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.disableDifferentialDownload = true;
   bindAutoUpdaterEvents();
   updaterReady = true;
   sendUpdateState({ status: "idle", message: "已启用 GitHub Releases 更新检查" });
@@ -173,7 +209,7 @@ function installUpdate() {
 }
 
 function defaultDataRoot() {
-  return path.resolve(app.getPath("userData"));
+  return fallbackDataRootPath();
 }
 
 function dataRoot() {
@@ -181,7 +217,15 @@ function dataRoot() {
 }
 
 function storagePointerPath() {
-  return path.join(defaultDataRoot(), "storage-location.txt");
+  return pointerPathFor(APP_STORAGE_NAMESPACE);
+}
+
+function legacyStoragePointerPath() {
+  return pointerPathFor(LEGACY_STORAGE_NAMESPACE);
+}
+
+function storagePointerCandidates() {
+  return [storagePointerPath(), legacyStoragePointerPath()];
 }
 
 function dataPath(...parts) {
@@ -193,7 +237,40 @@ function exportRoot() {
 }
 
 function legacyVaultPath() {
+  return dataPath("账户数据", "conduct-assistant-vault.enc.json");
+}
+
+function legacyRootVaultPath() {
   return dataPath("conduct-assistant-vault.enc.json");
+}
+
+function legacyVaultPaths() {
+  return [legacyVaultPath(), legacyRootVaultPath()];
+}
+
+async function migrateLegacyDefaultDataRoot(targetRoot) {
+  const legacyRoot = path.join(app.getPath("appData"), LEGACY_STORAGE_NAMESPACE);
+  if (samePath(legacyRoot, targetRoot) || !await pathExists(legacyRoot)) return false;
+  const transferable = new Set([
+    "账户数据",
+    "证据资料",
+    "班级资料包",
+    "导出结果",
+    "evidence",
+    "class-evidence",
+    "conduct-assistant-vault.enc.json",
+    "数据目录说明.txt",
+  ]);
+  const entries = await fs.readdir(legacyRoot);
+  const transferableEntries = entries.filter((entry) => transferable.has(entry));
+  if (!transferableEntries.length) return false;
+  await fs.mkdir(targetRoot, { recursive: true });
+  if ((await fs.readdir(targetRoot)).length) return false;
+  for (const entry of transferableEntries) {
+    await fs.cp(path.join(legacyRoot, entry), path.join(targetRoot, entry), { recursive: true });
+    await fs.rm(path.join(legacyRoot, entry), { recursive: true, force: true });
+  }
+  return true;
 }
 
 function vaultPath() {
@@ -202,12 +279,39 @@ function vaultPath() {
 
 async function initializeDataRoot() {
   const fallback = defaultDataRoot();
-  activeDataRoot = fallback;
+  if (!activeDataRoot) activeDataRoot = fallback;
+  let configuredPointer = "";
+  let configuredPointerPath = "";
+  for (const candidate of storagePointerCandidates()) {
+    try {
+      const configured = (await fs.readFile(candidate, "utf8")).trim();
+      if (configured && path.isAbsolute(configured)) {
+        configuredPointer = path.resolve(configured);
+        configuredPointerPath = candidate;
+        break;
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  if (configuredPointer) {
+    activeDataRoot = configuredPointer;
+    if (!samePath(configuredPointerPath, storagePointerPath())) {
+      await writeStoragePointer(activeDataRoot);
+    }
+  } else if (samePath(activeDataRoot, fallback)) {
+    await migrateLegacyDefaultDataRoot(activeDataRoot);
+    await writeStoragePointer(activeDataRoot);
+  }
+  await fs.mkdir(activeDataRoot, { recursive: true });
   try {
-    const configured = (await fs.readFile(storagePointerPath(), "utf8")).trim();
-    if (configured && path.isAbsolute(configured)) activeDataRoot = path.resolve(configured);
+    // Keep Electron's cache, preferences and application data beside the selected data.
+    // The central pointer only stores the location; account and password data never use it.
+    await fs.mkdir(path.join(activeDataRoot, ".runtime"), { recursive: true });
+    app.setPath("userData", activeDataRoot);
+    app.setPath("sessionData", path.join(activeDataRoot, ".runtime"));
   } catch (error) {
-    if (error.code !== "ENOENT") throw error;
+    console.warn("无法将 Electron 用户数据目录切换到选定位置：", error.message);
   }
 }
 
@@ -234,7 +338,7 @@ function rebaseStoredPaths(oldRoot, newRoot) {
 }
 
 async function writeStoragePointer(root) {
-  await fs.mkdir(defaultDataRoot(), { recursive: true });
+  await fs.mkdir(path.dirname(storagePointerPath()), { recursive: true });
   await fs.writeFile(storagePointerPath(), `${path.resolve(root)}\n`, "utf8");
 }
 
@@ -257,6 +361,13 @@ async function moveDataRoot(nextRoot) {
   rebaseStoredPaths(source, target);
   activeDataRoot = target;
   await writeStoragePointer(target);
+  try {
+    app.setPath("userData", target);
+    await fs.mkdir(path.join(target, ".runtime"), { recursive: true });
+    app.setPath("sessionData", path.join(target, ".runtime"));
+  } catch (error) {
+    console.warn("无法更新 Electron 用户数据目录：", error.message);
+  }
   await writeVault();
   return stateForRenderer();
 }
@@ -458,7 +569,7 @@ function blankAccount(name, password, profile = {}) {
 }
 
 async function readVault() {
-  for (const candidate of [vaultPath(), legacyVaultPath()]) {
+  for (const candidate of [vaultPath(), ...legacyVaultPaths()]) {
     try {
       const envelope = JSON.parse(await fs.readFile(candidate, "utf8"));
       if (envelope.algorithm === "electron-safeStorage") {
@@ -685,11 +796,18 @@ async function migrateReadableDataLayout() {
     ].join("\n"), "utf8");
   }
 
-  const oldVault = legacyVaultPath();
-  if (await pathExists(oldVault) && !samePath(oldVault, vaultPath())) changed = true;
+  const oldVaults = legacyVaultPaths().filter((candidate) => !samePath(candidate, vaultPath()));
+  for (const oldVault of oldVaults) {
+    if (await pathExists(oldVault)) {
+      changed = true;
+      break;
+    }
+  }
   if (changed || !await pathExists(vaultPath())) await writeVault();
-  if (await pathExists(oldVault) && !samePath(oldVault, vaultPath())) {
-    try { await fs.unlink(oldVault); } catch (error) { if (error.code !== "ENOENT") throw error; }
+  for (const oldVault of oldVaults) {
+    if (await pathExists(oldVault)) {
+      try { await fs.unlink(oldVault); } catch (error) { if (error.code !== "ENOENT") throw error; }
+    }
   }
 }
 
@@ -1497,7 +1615,7 @@ async function exportPackageEvidence({ records, evidences, sourceRoot, targetRoo
 async function buildStudentPackage() {
   const account = requireAccount();
   const finalizedEvidence = (account.evidence || []).filter((item) => item.draft !== true && !item.draftToken);
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "conduct-student-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "ymliuCaoXingAgent-student-"));
   const evidenceRoot = path.join(root, "evidence");
   await fs.mkdir(evidenceRoot, { recursive: true });
   const xlsxPath = path.join(root, "素质拓展测评统计.xlsx");
@@ -1517,7 +1635,7 @@ async function buildStudentPackage() {
   }
   const manifest = {
     schemaVersion: "0.1.0",
-    type: "student-conduct-package",
+    type: "student-evaluation-package",
     generatedAt: now(),
     profile: account.profile,
     project: account.project,
@@ -1552,7 +1670,7 @@ async function importPackages(inputPaths) {
     const manifestEntry = zip.getEntry("manifest.json");
     if (!manifestEntry) continue;
     const manifest = JSON.parse(manifestEntry.getData().toString("utf8"));
-    if (manifest.type !== "student-conduct-package") continue;
+    if (!new Set(["student-evaluation-package", "student-conduct-package"]).has(manifest.type)) continue;
     const packageId = id("package");
     const profile = manifest.profile || {};
     const baseFolderName = safeName([profile.name || "未命名学生", profile.studentId].filter(Boolean).join("_") || "未命名学生资料");
@@ -1632,7 +1750,7 @@ async function buildClassEvidenceArchive(account, rows, archiveName, classInfo =
   if (!classRows.length) throw new Error("请先导入至少一个学生资料包");
   const outputDir = exportRoot();
   await fs.mkdir(outputDir, { recursive: true });
-  const evidenceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "conduct-class-evidence-"));
+  const evidenceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ymliuCaoXingAgent-class-evidence-"));
   try {
     const usedNames = new Set();
     for (const item of classRows) {
@@ -1867,7 +1985,7 @@ function registerIpc() {
   ipcMain.handle("export:class-evidence", async (_event, info) => ({ evidenceZipPath: await buildClassEvidenceArchive(requireAccount(), undefined, undefined, info) }));
   ipcMain.handle("shell:openPath", (_event, filePath) => shell.openPath(filePath));
   ipcMain.handle("dialog:openFiles", async (_event, options = {}) => {
-const result = await dialog.showOpenDialog(mainWindow, { properties: ["openFile", "multiSelections"], filters: options.classPackages ? [{ name: "操行资料包", extensions: ["conductpkg", "zip"] }] : [{ name: "证据文件", extensions: ["pdf", "png", "jpg", "jpeg", "doc", "docx"] }] });
+const result = await dialog.showOpenDialog(mainWindow, { properties: ["openFile", "multiSelections"], filters: options.classPackages ? [{ name: "操行资料包", extensions: ["zip"] }] : [{ name: "证据文件", extensions: ["pdf", "png", "jpg", "jpeg", "doc", "docx"] }] });
     return result.canceled ? [] : result.filePaths;
   });
   ipcMain.handle("dialog:chooseDirectory", async () => {

@@ -48,7 +48,44 @@ jobs:
               });
             }
 
-      - name: Build and publish GitHub Release
-        run: npm run build:installer -- --publish always
+      - name: Build Windows installer
+        run: npm run build:installer -- --publish never
+
+      - name: Generate Windows update metadata
+        run: node build/generate-update-metadata.mjs release-installer
+
+      - name: Verify Windows update metadata
+        shell: pwsh
+        run: |
+          $metadata = Get-Content release-installer/latest.yml -Raw
+          if ($metadata -notmatch "ymliuCaoXingAgent\.exe") { throw "latest.yml 未指向标准安装包名称" }
+          if (-not (Test-Path release-installer/ymliuCaoXingAgent.exe)) { throw "Windows 安装包不存在" }
+
+      - name: Replace Windows assets in GitHub Release
+        uses: actions/github-script@v7
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+            const { owner, repo } = context.repo;
+            const tag = process.env.RELEASE_TAG;
+            const release = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+            for (const asset of release.data.assets) {
+              if (asset.name === "latest.yml" || /\.exe(?:\.blockmap)?$/i.test(asset.name)) {
+                await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
+                core.info(`deleted ${asset.name}`);
+              }
+            }
+            for (const name of ["ymliuCaoXingAgent.exe", "latest.yml"]) {
+              const filePath = path.join("release-installer", name);
+              const size = fs.statSync(filePath).size;
+              await github.rest.repos.uploadReleaseAsset({
+                owner, repo, release_id: release.data.id, name,
+                data: fs.createReadStream(filePath),
+                headers: { "content-type": "application/octet-stream", "content-length": size },
+              });
+              core.info(`uploaded ${name} (${size} bytes)`);
+            }

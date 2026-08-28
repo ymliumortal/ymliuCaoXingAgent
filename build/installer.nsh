@@ -16,7 +16,7 @@ Function DataLocationPageCreate
   ${If} $0 == error
     Abort
   ${EndIf}
-  ${NSD_CreateLabel} 0 0 100% 30u "请选择操行统计助手的数据储存位置。账户、证据和班级资料包都会保存在这里。"
+  ${NSD_CreateLabel} 0 0 100% 30u "请选择 ymliuCaoXingAgent 的数据储存位置。账户、密码、证据和班级资料包都会保存在这里。"
   Pop $0
   ${NSD_CreateText} 0 38u 76% 13u "$DataLocation"
   Pop $DataLocationInput
@@ -63,7 +63,7 @@ FunctionEnd
 Function DataLocationPageLeave
   ${NSD_GetText} $DataLocationInput $DataLocation
   ${If} $DataLocation == ""
-    StrCpy $DataLocation "$DOCUMENTS\操行统计助手数据"
+    StrCpy $DataLocation "$DOCUMENTS\ymliuCaoXingAgent-数据"
   ${EndIf}
   Call ValidateDataLocationEmpty
   ${If} $DataLocationEmpty == "0"
@@ -75,13 +75,20 @@ FunctionEnd
 !endif
 
 !macro customInit
-  StrCpy $DataLocation "$DOCUMENTS\操行统计助手数据"
+  StrCpy $DataLocation "$DOCUMENTS\ymliuCaoXingAgent-数据"
   StrCpy $DesktopShortcut "1"
-  IfFileExists "$APPDATA\conduct-assistant\storage-location.txt" 0 dataLocationNoPrevious
-    FileOpen $0 "$APPDATA\conduct-assistant\storage-location.txt" r
+  IfFileExists "$APPDATA\ymliuCaoXingAgent\storage-location.txt" dataLocationReadCurrent dataLocationReadLegacy
+  dataLocationReadCurrent:
+    FileOpen $0 "$APPDATA\ymliuCaoXingAgent\storage-location.txt" r
     FileRead $0 $DataLocation
     FileClose $0
-  dataLocationNoPrevious:
+    Goto dataLocationPointerLoaded
+  dataLocationReadLegacy:
+    IfFileExists "$APPDATA\conduct-assistant\storage-location.txt" 0 dataLocationPointerLoaded
+      FileOpen $0 "$APPDATA\conduct-assistant\storage-location.txt" r
+      FileRead $0 $DataLocation
+      FileClose $0
+  dataLocationPointerLoaded:
 !macroend
 
 !ifndef BUILD_UNINSTALLER
@@ -92,17 +99,17 @@ FunctionEnd
 
 !macro customInstall
   CreateDirectory "$DataLocation"
-  IfFileExists "$APPDATA\conduct-assistant\storage-location.txt" dataLocationPointerDone
-    CreateDirectory "$APPDATA\conduct-assistant"
-    FileOpen $0 "$APPDATA\conduct-assistant\storage-location.txt" w
+  IfSilent dataLocationPointerDone
+    CreateDirectory "$APPDATA\ymliuCaoXingAgent"
+    FileOpen $0 "$APPDATA\ymliuCaoXingAgent\storage-location.txt" w
     FileWrite $0 "$DataLocation$\r$\n"
     FileClose $0
   dataLocationPointerDone:
   ${If} $DesktopShortcut == 1
-    CreateShortCut "$DESKTOP\操行统计助手.lnk" "$INSTDIR\操行统计助手.exe"
+    CreateShortCut "$DESKTOP\ymliuCaoXingAgent.lnk" "$INSTDIR\ymliuCaoXingAgent.exe"
   ${EndIf}
 !macroend
 
 !macro customUnInstall
-  Delete "$DESKTOP\操行统计助手.lnk"
+  Delete "$DESKTOP\ymliuCaoXingAgent.lnk"
 !macroend

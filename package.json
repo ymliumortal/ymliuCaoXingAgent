@@ -1,5 +1,5 @@
 {
-  "name": "conduct-assistant",
+  "name": "ymliucaoxingagent",
   "version": "0.1.0",
   "description": "中国药科大学本科生综合素质测评操行统计助手",
   "repository": {
@@ -24,8 +24,9 @@
     "exceljs": "^4.4.0"
   },
   "build": {
-    "appId": "cn.cpu.conductassistant",
-    "productName": "操行统计助手",
+    "appId": "cn.cpu.ymliucaoxingagent",
+    "productName": "ymliuCaoXingAgent",
+    "executableName": "ymliuCaoXingAgent",
     "artifactName": "ymliuCaoXingAgent.${ext}",
     "directories": {
       "output": "release-installer",
