@@ -1,0 +1,19 @@
+node_modules/
+dist/
+release/
+release-installer/
+*.log
+test-output/
+
+# electron-builder unpacked runtime generated beside the source tree
+/操行统计助手.exe
+/locales/
+/resources/
+/chrome_*.pak
+/*.dll
+/*.dat
+/*.bin
+/resources.pak
+/LICENSE.electron.txt
+/LICENSES.chromium.html
+/vk_swiftshader_icd.json

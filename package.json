@@ -1,0 +1,47 @@
+{
+  "name": "conduct-assistant",
+  "version": "0.1.0",
+  "description": "中国药科大学本科生综合素质测评操行统计助手",
+  "main": "electron/main.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.mjs",
+    "build:installer": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "43.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "adm-zip": "0.6.0",
+    "electron-updater": "^6.8.9",
+    "exceljs": "^4.4.0"
+  },
+  "build": {
+    "appId": "cn.cpu.conductassistant",
+    "productName": "操行统计助手",
+    "artifactName": "${productName}-${version}-安装程序.${ext}",
+    "directories": {
+      "output": "release-installer",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "templates/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "include": "build/installer.nsh"
+    }
+  }
+}
