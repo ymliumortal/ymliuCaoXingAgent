@@ -27,7 +27,7 @@ test("API Manager 只暴露 Chat 和 Responses 协议", () => {
 });
 
 test("模型平台默认不填模型，并提供平台自己的候选模型", () => {
-  for (const provider of ["openai", "anthropic", "xai", "gemini", "deepseek", "glm", "kimi"]) {
+  for (const provider of ["openai", "anthropic", "xai", "gemini", "deepseek", "glm", "kimi", "orcarouter"]) {
     assert.equal(AI_PROVIDER_PRESETS[provider].model, "");
     assert.ok(AI_PROVIDER_PRESETS[provider].models.length > 0);
   }
@@ -38,6 +38,8 @@ test("模型平台默认不填模型，并提供平台自己的候选模型", ()
   const removedDeepSeekModels = ["chat", "reasoner"].map((suffix) => `deepseek-${suffix}`);
   for (const model of removedDeepSeekModels) assert.ok(!AI_PROVIDER_PRESETS.deepseek.models.includes(model));
   for (const model of removedDeepSeekModels) assert.equal(normalizeAiSettings({ provider: "deepseek", model }).model, "");
+  assert.equal(AI_PROVIDER_PRESETS.orcarouter.baseUrl, "https://api.orcarouter.ai/v1");
+  assert.ok(AI_PROVIDER_PRESETS.orcarouter.models.includes("orcarouter/auto"));
 });
 
 test("DeepSeek 官方旧版 Base URL 会统一为根地址", () => {
@@ -46,11 +48,12 @@ test("DeepSeek 官方旧版 Base URL 会统一为根地址", () => {
 });
 
 test("预设平台覆盖日志中的主要模型服务和协议", () => {
-  for (const provider of ["openai", "anthropic", "xai", "gemini", "deepseek", "glm", "kimi"]) {
+  for (const provider of ["openai", "anthropic", "xai", "gemini", "deepseek", "glm", "kimi", "orcarouter"]) {
     const preset = AI_PROVIDER_PRESETS[provider];
     assert.ok(preset.baseUrl, `${provider} should have a base URL`);
     assert.ok(preset.protocols.includes(preset.protocol), `${provider} protocol should be selectable`);
   }
+  assert.deepEqual(AI_PROVIDER_PRESETS.orcarouter.protocols, ["openai-chat", "openai-responses"]);
   assert.deepEqual(Object.keys(AI_PROTOCOLS), ["openai-chat", "openai-responses", "anthropic-messages", "gemini-generate"]);
 });
 

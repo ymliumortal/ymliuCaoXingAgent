@@ -75,7 +75,7 @@ npm run build:installer -- --publish always
 
 AI 默认关闭。上方只配置 AI 开关、平台、协议、Base URL 和 API Key。模型列表位于下方“已保存的接口列表”内，展示平台预设和在线同步结果，每个模型都可以单独点击“启用”来确定实际使用模型。
 
-设置页会在本机保留最多 12 条接口填写记录，只保存平台、协议、Base URL、模型和检测结果，不保存可见 API Key。点击“测试连接”后，程序发送不包含证据的最小测试请求，并记录连接状态和延迟。在线模型列表请求失败时只显示真实错误，不会伪造候选模型。
+设置页会在本机保留最多 12 条接口填写记录，只保存平台、协议、Base URL、模型和检测结果，不保存可见 API Key。点击“测试连接”后，程序发送不包含证据的最小测试请求，并记录连接状态和延迟。在线模型列表请求失败时只显示真实错误，不会伪造候选模型。内置平台包括 OpenAI、Claude、Grok、Gemini、DeepSeek、GLM、Kimi 和 OrcaRouter；OrcaRouter 默认使用 `https://api.orcarouter.ai/v1`，可同步其账户可用模型，也可选择 `orcarouter/auto` 自动路由。
 
 支持 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages、Gemini generateContent 四类协议。API Key 只保存在本机账户存储中；只有在用户开启 AI 并执行识别时，必要的证据文本或图片才会发送到所选接口，识别结果仍须人工确认。
 

@@ -86,6 +86,16 @@ export const AI_PROVIDER_PRESETS = {
     models: ["kimi-k3", "moonshot-v1-8k"],
     keyLabel: "Moonshot API Key",
   },
+  orcarouter: {
+    label: "OrcaRouter",
+    description: "OrcaRouter 多模型 OpenAI 兼容网关",
+    baseUrl: "https://api.orcarouter.ai/v1",
+    protocol: "openai-chat",
+    protocols: ["openai-chat", "openai-responses"],
+    model: "",
+    models: ["orcarouter/auto"],
+    keyLabel: "OrcaRouter API Key",
+  },
   manual: {
     label: "手动配置",
     description: "填写任意兼容接口的 Base URL、协议和模型",
